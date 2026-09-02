@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 gunicorn
+a2wsgi
 anthropic
 groq
 python-dotenv
