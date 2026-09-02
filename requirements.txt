@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+gunicorn
+anthropic
+groq
+python-dotenv
+httpx
+google-generativeai
