@@ -23,7 +23,7 @@ async def resolve_youtube_video(client, title, channel="", topic=""):
         encoded_query = urllib.parse.quote(search_term)
         url = f"https://www.youtube.com/results?search_query={encoded_query}"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-        res = await client.get(url, headers=headers, timeout=3.5)
+        res = await client.get(url, headers=headers, timeout=2.0)
         video_ids = re.findall(r'"videoId":"([^"]+)"', res.text)
         if video_ids:
             return f"https://www.youtube.com/watch?v={video_ids[0]}"
@@ -36,7 +36,7 @@ async def resolve_web_resource(client, title, source="", topic=""):
     try:
         url = "https://lite.duckduckgo.com/lite/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        res = await client.post(url, data={"q": search_term}, headers=headers, timeout=3.5)
+        res = await client.post(url, data={"q": search_term}, headers=headers, timeout=2.0)
         links = re.findall(r'href="(https?://[^"]+)"', res.text)
         valid_links = [l for l in links if "duckduckgo.com" not in l and "bing.com" not in l]
         if valid_links:
@@ -49,24 +49,37 @@ async def enrich_study_pack(pack, topic=""):
     if not pack or not isinstance(pack, dict):
         return pack
     
-    async with httpx.AsyncClient(follow_redirects=True) as client:
-        # Resolve videos
-        if "videos" in pack and isinstance(pack["videos"], list):
-            tasks = [resolve_youtube_video(client, v.get("title", ""), v.get("channel", ""), topic) for v in pack["videos"]]
-            yt_urls = await asyncio.gather(*tasks)
-            for i, vid in enumerate(pack["videos"]):
-                vid["url"] = yt_urls[i]
-                
-        # Resolve web links (notes, question papers, marking schemes)
-        for key in ["notes_links", "question_papers", "marking_schemes"]:
-            if key in pack and isinstance(pack[key], list):
-                tasks = [resolve_web_resource(client, item.get("title", ""), item.get("source", ""), topic) for item in pack[key]]
-                web_urls = await asyncio.gather(*tasks)
-                for i, item in enumerate(pack[key]):
-                    existing_url = item.get("url", "")
-                    if not existing_url or "google.com/search" in existing_url or "youtube.com/results" in existing_url:
-                        item["url"] = web_urls[i]
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=2.0) as client:
+            # Resolve videos
+            if "videos" in pack and isinstance(pack["videos"], list):
+                tasks = [resolve_youtube_video(client, v.get("title", ""), v.get("channel", ""), topic) for v in pack["videos"]]
+                yt_urls = await asyncio.gather(*tasks, return_exceptions=True)
+                for i, vid in enumerate(pack["videos"]):
+                    res_url = yt_urls[i] if i < len(yt_urls) else None
+                    if isinstance(res_url, str) and res_url:
+                        vid["url"] = res_url
+                    else:
+                        search_term = f"{vid.get('title', '')} {vid.get('channel', '')} {topic}".strip()
+                        vid["url"] = f"https://www.youtube.com/results?search_query={urllib.parse.quote(search_term)}"
                         
+            # Resolve web links (notes, question papers, marking schemes)
+            for key in ["notes_links", "question_papers", "marking_schemes"]:
+                if key in pack and isinstance(pack[key], list):
+                    tasks = [resolve_web_resource(client, item.get("title", ""), item.get("source", ""), topic) for item in pack[key]]
+                    web_urls = await asyncio.gather(*tasks, return_exceptions=True)
+                    for i, item in enumerate(pack[key]):
+                        res_url = web_urls[i] if i < len(web_urls) else None
+                        existing_url = item.get("url", "")
+                        if not existing_url or "google.com/search" in existing_url or "youtube.com/results" in existing_url:
+                            if isinstance(res_url, str) and res_url:
+                                item["url"] = res_url
+                            else:
+                                search_term = f"{item.get('title', '')} {item.get('source', '')} {topic}".strip()
+                                item["url"] = f"https://www.google.com/search?q={urllib.parse.quote(search_term)}"
+    except Exception as e:
+        print("Enrichment fallback triggered:", e)
+        
     return pack
 
 async def generate_study_pack(board: str, class_level: str, subject: str, topic: str) -> dict:
@@ -142,7 +155,7 @@ Rules:
             return None
         try:
             genai.configure(api_key=gemini_api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_prompt)
+            model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=system_prompt)
             response = await model.generate_content_async(
                 user_message,
                 generation_config=genai.types.GenerationConfig(
@@ -178,16 +191,24 @@ Rules:
             print(f"Anthropic error: {e}")
 
     if not groq_res and not gemini_res:
-        raise RuntimeError("Failed to generate responses from the models.")
+        raise RuntimeError("Failed to generate responses from the models. Please verify GROQ_API_KEY or GEMINI_API_KEY environment variables.")
 
-    # Enrich search URLs into direct video & web links concurrently
-    enriched_groq, enriched_gemini = await asyncio.gather(
-        enrich_study_pack(groq_res, topic),
-        enrich_study_pack(gemini_res, topic)
-    )
+    # Enrich search URLs into direct video & web links concurrently with strict 3s max timeout
+    try:
+        enriched_groq = await asyncio.wait_for(enrich_study_pack(groq_res, topic), timeout=3.0) if groq_res else None
+    except Exception as e:
+        print("Groq enrichment skipped due to timeout:", e)
+        enriched_groq = groq_res
+
+    try:
+        enriched_gemini = await asyncio.wait_for(enrich_study_pack(gemini_res, topic), timeout=3.0) if gemini_res else None
+    except Exception as e:
+        print("Gemini enrichment skipped due to timeout:", e)
+        enriched_gemini = gemini_res
 
     return {
         "response1": enriched_groq,
         "response2": enriched_gemini
     }
+
 
