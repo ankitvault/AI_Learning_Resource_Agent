@@ -1,7 +1,7 @@
 import os
 import sys
 
-current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+current_dir = os.path.dirname(os.path.abspath(__file__))
 backend_dir = os.path.join(current_dir, "backend")
 
 if current_dir not in sys.path:
