@@ -14,8 +14,6 @@ try:
 except ImportError:
     from main import app as fast_app
 
-from a2wsgi import ASGIMiddleware
-
-application = ASGIMiddleware(fast_app)
-wsgi = application
 app = fast_app
+application = fast_app
+wsgi = fast_app
