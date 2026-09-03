@@ -14,8 +14,11 @@ function App() {
     setError(null);
     setApiResponse(null);
 
+    const apiBaseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/+$/, '') : '';
+    const endpoint = `${apiBaseUrl}/api/generate`;
+
     try {
-      const response = await fetch('/api/generate', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -29,7 +32,7 @@ function App() {
           const errJson = await response.json();
           if (errJson.detail) errText = errJson.detail;
         } catch (e) {
-          errText = `Server error: ${response.statusText}`;
+          errText = `Server error (${response.status}): ${response.statusText || 'Unable to reach backend'}`;
         }
         throw new Error(errText);
       }

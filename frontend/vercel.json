@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://ai-learning-resource-agent.onrender.com/api/:path*"
+    }
+  ]
+}
