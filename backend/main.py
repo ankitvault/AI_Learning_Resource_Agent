@@ -51,3 +51,7 @@ async def generate_endpoint(request: StudyRequest):
 @app.get("/")
 async def root():
     return {"message": "AI Study Resource Agent API is running."}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

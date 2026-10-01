@@ -83,6 +83,8 @@ function StudyPack({ data }) {
                 url={vid.url}
                 description={vid.why}
                 badge="Video"
+                verified={vid.verified}
+                is_search_fallback={vid.is_search_fallback}
               />
             ))}
           </div>
@@ -101,6 +103,8 @@ function StudyPack({ data }) {
                 subtitle={note.source}
                 url={note.url}
                 badge={note.type || 'Resource'}
+                verified={note.verified}
+                is_search_fallback={note.is_search_fallback}
               />
             ))}
           </div>
@@ -119,6 +123,8 @@ function StudyPack({ data }) {
                 subtitle={paper.source}
                 url={paper.url}
                 badge="Paper"
+                verified={paper.verified}
+                is_search_fallback={paper.is_search_fallback}
               />
             ))}
           </div>
@@ -137,6 +143,8 @@ function StudyPack({ data }) {
                 subtitle={scheme.source}
                 url={scheme.url}
                 badge="Scheme"
+                verified={scheme.verified}
+                is_search_fallback={scheme.is_search_fallback}
               />
             ))}
           </div>
